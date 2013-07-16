@@ -34,4 +34,8 @@ if(($result | Measure).Count -lt 1) {
 
 Future Features
 ---------------
-DB Migrations - Currently, the example_migration.ps1 script shows the way to implement some basic DB migrations.
+DB Migrations - Currently, the example_migration.ps1 script shows the way to implement some basic DB migrations.  Hopefully, future migrations can function something like the following:
+
+```powershell
+New-Migration "migration_description" "string:name" "string:description" "datetime:due_date"
+```
