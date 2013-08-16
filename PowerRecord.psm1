@@ -15,13 +15,18 @@ function Connect-ODBC {
   
   param(
     [Parameter(Position=0,Mandatory=1)]
-    [string]$Dsn
+    [string]$Dsn,
+    [string]$Database = ""
   )
   
   try {
-    $db = New-Object System.Data.ODBC.ODBCConnection("DSN=$($Dsn)") -ErrorAction "Stop"
+    if($Database -ne ""){
+        $db = New-Object System.Data.ODBC.ODBCConnection("DSN=$($Dsn);Database=$($Database)") -ErrorAction "Stop"
+    } else {
+        $db = New-Object System.Data.ODBC.ODBCConnection("DSN=$($Dsn)") -ErrorAction "Stop"
+    }
     $Global:ODBCConnections += $db
-    Write-Host "Successfully loaded $($Dsn)!"
+    Write-Verbose "Successfully loaded $($Dsn)!"
   }
   catch {
     return "Unable to establish database connection to $($Dsn): $($error[0].Exception.Message)"
@@ -110,22 +115,33 @@ function Invoke-NoResultQuery {
     [Parameter(Position=0,Mandatory=1)]
     [string]$Query,
     [Parameter(Position=1,Mandatory=0)]
-    [string]$Dsn=""
+    [string]$Dsn="",
+    [switch]$Force
   )
   
   if(($Global:ODBCConnections | Measure).Count -lt 1){
-    return "No database connections found.  Import a new connection using Connect-Database first."
+    throw "No database connections found.  Import a new connection using Connect-ODBC first."
+    exit
   }
   
   $ConnectionsToUse = @()
+  $Dsn = ""
   if($Dsn -eq "") {
     $ConnectionsToUse += $Global:ODBCConnections
   } else {
     $ConnectionsToUse += $Global:ODBCConnections | Where ConnectionString -eq ("DSN=" + $Dsn)
     if(($ConnectionsToUse | Measure).Count -lt 1){
-      return "No currently loaded database connections matched $($Dsn)."
+      throw "No currently loaded database connections matched $($Dsn)."
+      exit
     }
   }
+  
+    if($Force -eq $False){
+        Write-Host "Connections loaded:"
+        ($Global:ODBCConnections).ConnectionString
+        $response = Read-Host "Continue (Y/n)"
+        if($response -eq "n") { exit }
+    }
   
   foreach ($db in $ConnectionsToUse) {
     
@@ -135,11 +151,11 @@ function Invoke-NoResultQuery {
     $db.Open()
     $cmd.commandText = $Query
     $reader = $cmd.ExecuteReader()
-    Write-Host "Query completed successfully!"
+    Write-Verbose "Query completed successfully!"
     
     } catch [Exception] {
-      Write-Host "Caught the following exception:"
-      Write-Host $_
+      Write-Error "Caught the following exception:"
+      Write-Error $_
       $_ | Select *
     } finally {
       if($reader) { $reader.Close() }
@@ -176,22 +192,33 @@ function Invoke-ResultQuery {
     [Parameter(Position=0,Mandatory=1)]
     [string]$Query,
     [Parameter(Position=1,Mandatory=0)]
-    [string]$Dsn=""
+    [string]$Dsn="",
+    [switch]$Force
   )
   
   if(($Global:ODBCConnections | Measure).Count -lt 1){
-    return "No database connections found.  Import a new connection using Connect-Database first."
+    throw "No database connections found.  Import a new connection using Connect-ODBC first."
+    exit
   }
   
   $ConnectionsToUse = @()
+  $Dsn = ""
   if($Dsn -eq "") {
     $ConnectionsToUse += $Global:ODBCConnections
   } else {
     $ConnectionsToUse += $Global:ODBCConnections | Where ConnectionString -eq ("DSN=" + $Dsn)
     if(($ConnectionsToUse | Measure).Count -lt 1){
-      return "No currently loaded database connections matched $($Dsn)."
+      throw "No currently loaded database connections matched $($Dsn)."
+      exit
     }
   }
+  
+    if($Force -eq $False){
+        Write-Host "Connections loaded:"
+        ($Global:ODBCConnections).ConnectionString
+        $response = Read-Host "Continue (Y/n)"
+        if($response -eq "n") { exit }
+    }
   
   foreach ($db in $ConnectionsToUse) {
     
@@ -216,8 +243,8 @@ function Invoke-ResultQuery {
         return @()
       }
     } catch [Exception] {
-      Write-Host "Caught the following exception:"
-      Write-Host $_
+      Write-Error "Caught the following exception:"
+      Write-Error $_
       $_ | Select *
     } finally {
       $reader.Close()
@@ -256,7 +283,7 @@ function New-Migration {
   )
   
   #Establish template variables
-  $Date = Get-Date -Format "yyyyddMMHHmmss"
+  $Date = Get-Date -Format "yyyyMMddHHmmss"
   $Qualifier = "#="
   $PreQueryUp = ($Qualifier + "pre_query_up")
   $QueryUp = ($Qualifier + "query_up")
@@ -272,9 +299,11 @@ function New-Migration {
   if(!$DownQuery.EndsWith(";") -AND $DownQuery -ne "") {
     $DownQuery += ";"
   }
+  $Query = $Query -replace '"','`"'
+  $DownQuery = $DownQuery -replace '"','`"'
   
   #Import migration template
-  $temp = gc ".\Templates\migration_template.ps1"
+  $temp = gc "$PSScriptRoot\Templates\migration_template.ps1"
   
   $temp = $temp -replace $PreQueryUp, $PreUp
   $temp = $temp -replace $PostQueryUp, $PostUp

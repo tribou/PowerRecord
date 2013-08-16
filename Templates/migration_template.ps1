@@ -1,11 +1,11 @@
 # Migration Template
 # Migration returns $true if successful
-# Run migration example: .\db_migration_20130304_example.ps1 -up -dsn "ODBC-Datasource"
+# Run migration example: .\db_migration_20130304_example.ps1 -up -force
 
 param(
-    [string]$Dsn,
     [switch]$Up,
-    [switch]$Down
+    [switch]$Down,
+    [switch]$Force
 )
 
 if($Up -AND $Down) { 
@@ -19,23 +19,15 @@ if($Up -AND $Down) {
 
 # Check dependencies
 if((Get-Module PowerRecord | Measure).Count -lt 1) {
-  return "Import PowerRecord module before running this migration."
-}
-
-$ConnectionsToUse = @()
-if($Dsn -eq "") {
-  foreach($conn in ($Global:DatabaseConnections).ConnectionString) {
-    $ConnectionsToUse += ($conn -replace "DSN=","")
-  }
-} else {
-  $ConnectionsToUse += $Dsn
+  throw "Import PowerRecord module before running this migration."
+  exit
 }
 
 ########################################################################
 ######################## EDIT FROM HERE DOWN ###########################
 ########################################################################
 
-foreach ($db in $ConnectionsToUse) {
+#foreach ($db in $ConnectionsToUse) {
 
   # The UP migration
   if($Up) {
@@ -53,7 +45,11 @@ foreach ($db in $ConnectionsToUse) {
 
     # Execute query
     foreach($query in $queries) {
-      NoResult-Query -Dsn $db -Query $query
+      if($Force){
+        Invoke-NoResultQuery -Query $query -Force
+      } else {
+        Invoke-NoResultQuery -Query $query
+      }
     }
 
     #=post_query_up
@@ -75,10 +71,14 @@ foreach ($db in $ConnectionsToUse) {
 
     # Execute query
     foreach($query in $queries) {
-      NoResult-Query -Dsn $db -Query $query
+      if($Force){
+        Invoke-NoResultQuery -Query $query -Force
+      } else {
+        Invoke-NoResultQuery -Query $query
+      }
     }
 
     #=post_query_down
     return $true
   }
-}
+#}
